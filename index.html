@@ -1,0 +1,735 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>진동 주파수 분석기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* layout: single scrolling column, capped width on wide screens, instrument-panel composition */
+:root{
+  --bg:#f3f5f3; --surface:#ffffff; --surface-2:#eceeec; --fg:#141a18; --fg-dim:#5c6764;
+  --border:#d7dcd8; --accent:#0f8a7a; --accent-ink:#0b6657; --accent2:#b8720f; --accent2-ink:#8f5a0a;
+  --warn:#c23b22; --font-head:'Space Grotesk',system-ui,sans-serif; --font-body:'Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a0f0e; --surface:#121816; --surface-2:#1a2220; --fg:#e8f1ee; --fg-dim:#8ba29c;
+    --border:#223029; --accent:#35d6b8; --accent-ink:#8ff0dd; --accent2:#e8a23a; --accent2-ink:#ffcb7d;
+    --warn:#ff7a5c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0f0e; --surface:#121816; --surface-2:#1a2220; --fg:#e8f1ee; --fg-dim:#8ba29c;
+  --border:#223029; --accent:#35d6b8; --accent-ink:#8ff0dd; --accent2:#e8a23a; --accent2-ink:#ffcb7d;
+  --warn:#ff7a5c; color-scheme:dark;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--bg); color:var(--fg); font-family:var(--font-body);
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:0;
+}
+.wrap{max-width:640px; margin:0 auto; padding-bottom:40px;}
+h1,h2,h3{font-family:var(--font-head); margin:0; text-wrap:balance;}
+header.top{padding:20px 0 14px; display:flex; align-items:center; gap:10px;}
+header.top svg{flex:none;}
+header.top h1{font-size:1.25rem; font-weight:700;}
+header.top p{margin:2px 0 0; color:var(--fg-dim); font-size:.82rem;}
+section{margin-top:18px;}
+.card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px;}
+.step-label{display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; color:var(--fg-dim); text-transform:uppercase; margin-bottom:10px;}
+.step-label .num{display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--surface-2); color:var(--fg); font-weight:700; font-size:.68rem;}
+details.tips{border:1px solid var(--border); border-radius:10px; background:var(--surface); padding:0; overflow:hidden;}
+details.tips summary{cursor:pointer; padding:12px 16px; font-weight:600; font-size:.88rem; list-style:none; display:flex; justify-content:space-between; align-items:center;}
+details.tips summary::-webkit-details-marker{display:none;}
+details.tips summary::after{content:'+'; font-family:var(--font-mono); font-size:1.1rem; color:var(--fg-dim);}
+details.tips[open] summary::after{content:'−';}
+details.tips .body{padding:0 16px 14px; color:var(--fg-dim); font-size:.84rem; line-height:1.55;}
+details.tips .body ul{margin:6px 0 0; padding-left:1.1em;}
+details.tips .body li{margin-bottom:5px;}
+input[type=file]{width:100%; font-size:.85rem; color:var(--fg);}
+.filebtn{display:inline-flex; align-items:center; gap:8px; background:var(--accent); color:#06231d; font-weight:600; font-size:.85rem; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; font-family:var(--font-body);}
+.row{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;}
+.modebtn{flex:1; min-width:120px; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--fg); font-size:.84rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; justify-content:center;}
+.modebtn .dot{width:10px; height:10px; border-radius:50%; flex:none;}
+.modebtn[data-active="true"]{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset;}
+.stage-wrap{position:relative; margin-top:12px; border-radius:8px; overflow:hidden; background:#000; touch-action:none;}
+canvas#stage{display:block; width:100%; height:auto; touch-action:none;}
+canvas#mag{position:absolute; top:10px; right:10px; width:120px; height:120px; border-radius:50%; border:2px solid var(--accent); background:#000; pointer-events:none; box-shadow:0 2px 10px rgba(0,0,0,.4);}
+.coords{margin-top:8px; display:flex; gap:16px; font-family:var(--font-mono); font-size:.76rem; color:var(--fg-dim);}
+.coords b{color:var(--fg); font-weight:600;}
+.ghost{background:transparent; border:1px solid var(--border); color:var(--fg); padding:8px 14px; border-radius:8px; font-size:.82rem; cursor:pointer; font-family:var(--font-body);}
+summary.adv{cursor:pointer; font-size:.82rem; color:var(--fg-dim); margin-top:12px;}
+.advbody{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;}
+.field{display:flex; flex-direction:column; gap:4px;}
+.field label{font-size:.72rem; color:var(--fg-dim);}
+.field input[type=number]{width:100%; padding:7px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2); color:var(--fg); font-family:var(--font-mono); font-size:.82rem;}
+.field.check{flex-direction:row; align-items:center; grid-column:1/-1;}
+.field.check label{font-size:.8rem; color:var(--fg);}
+.primarybtn{width:100%; margin-top:14px; padding:13px; border-radius:9px; border:none; background:var(--accent); color:#06231d; font-weight:700; font-size:.95rem; cursor:pointer; font-family:var(--font-head);}
+.primarybtn:disabled{opacity:.4; cursor:not-allowed;}
+.progress{height:6px; border-radius:4px; background:var(--surface-2); margin-top:12px; overflow:hidden; display:none;}
+.progress .bar{height:100%; width:0%; background:var(--accent); transition:width .08s linear;}
+.status{margin-top:8px; font-size:.78rem; color:var(--fg-dim); font-family:var(--font-mono);}
+.warnbox{margin-top:10px; padding:10px 12px; border-radius:8px; background:color-mix(in srgb, var(--warn) 14%, var(--surface)); border:1px solid var(--warn); color:var(--warn); font-size:.8rem; display:none;}
+.results{display:none;}
+.readout{display:flex; align-items:baseline; gap:10px; padding:16px; border-radius:10px; background:var(--surface-2); border:1px solid var(--border);}
+.readout .big{font-family:var(--font-mono); font-size:2.1rem; font-weight:700; color:var(--accent-ink); font-variant-numeric:tabular-nums;}
+.readout .unit{font-size:.9rem; color:var(--fg-dim);}
+.statgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); border-radius:8px; overflow:hidden; margin-top:10px;}
+.statgrid .cell{background:var(--surface); padding:10px 8px; text-align:center;}
+.statgrid .cell .v{font-family:var(--font-mono); font-weight:700; font-size:.95rem; font-variant-numeric:tabular-nums;}
+.statgrid .cell .k{font-size:.68rem; color:var(--fg-dim); margin-top:2px;}
+.peaklist{margin-top:10px; border-top:1px solid var(--border);}
+.peaklist .row2{display:flex; justify-content:space-between; padding:8px 2px; border-bottom:1px solid var(--border); font-size:.84rem; align-items:center;}
+.peaklist .row2 .f{font-family:var(--font-mono); font-weight:600;}
+.peaklist .row2 .bar{height:6px; width:60px; border-radius:3px; background:var(--surface-2); overflow:hidden; margin-left:10px;}
+.peaklist .row2 .bar i{display:block; height:100%; background:var(--accent);}
+.charttitle{font-size:.76rem; color:var(--fg-dim); margin:16px 0 6px; font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.04em;}
+canvas.chart{width:100%; height:150px; display:block; border-radius:6px; background:var(--surface-2);}
+.legend{display:flex; gap:16px; margin-top:6px; font-size:.76rem; color:var(--fg-dim);}
+.legend span{display:inline-flex; align-items:center; gap:6px;}
+.legend i{width:14px; height:2px; display:inline-block;}
+footer{margin-top:28px; color:var(--fg-dim); font-size:.74rem; line-height:1.6; border-top:1px solid var(--border); padding-top:14px;}
+video.preview-video{display:block; width:100%; max-height:70vh; border-radius:8px; margin-top:12px; background:#000;}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <svg width="34" height="34" viewBox="0 0 34 34"><path d="M1 17 Q6 4 10 17 T19 17 T28 17" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"/></svg>
+    <div>
+      <h1>진동 주파수 분석기</h1>
+      <p>휴대폰 영상에서 임팩트 후 떨림의 주요 고유진동수를 추출합니다</p>
+    </div>
+  </header>
+
+  <details class="tips" open>
+    <summary>촬영 전 확인할 것</summary>
+    <div class="body">
+      <ul>
+        <li>카메라를 <b style="color:var(--fg)">슬로우모션(240fps 이상)</b> 모드로 설정하세요. 측정 가능한 최대 주파수는 <i>프레임레이트의 절반</i>(나이퀴스트 한계)입니다.</li>
+        <li>손으로 들고 찍어도 괜찮습니다. 손떨림은 보통 5~12Hz 대역이라, 측정 대상 주파수가 그보다 충분히 높으면 기준점 보정으로 분리됩니다.</li>
+        <li>측정점(물체 위)과 기준점(카메라와 함께 움직이는 손이나 배경)이 또렷이 구분되도록 밝은 테이프 등 마커를 붙이면 추적이 더 정확해집니다.</li>
+        <li>촬영 후 이 페이지에서 <b style="color:var(--fg)">갤러리의 영상 파일</b>을 불러오세요(페이지 내 직접 촬영은 고속 모드를 쓸 수 없어 권장하지 않습니다).</li>
+      </ul>
+    </div>
+  </details>
+
+  <section class="card">
+    <div class="step-label"><span class="num">1</span>영상 불러오기</div>
+    <input id="fileInput" type="file" accept="video/*" hidden>
+    <button class="filebtn" id="pickBtn">영상 파일 선택</button>
+    <span id="fileName" style="margin-left:10px; font-size:.82rem; color:var(--fg-dim);"></span>
+    <video id="video" class="preview-video" hidden playsinline muted controls></video>
+  </section>
+
+  <section class="card" id="pickSection" style="display:none;">
+    <div class="step-label"><span class="num">2</span>측정점 · 기준점 지정</div>
+    <div class="row">
+      <button class="modebtn" id="modeTarget" data-active="true"><span class="dot" style="background:var(--accent)"></span>측정점(물체)</button>
+      <button class="modebtn" id="modeRef"><span class="dot" style="background:var(--accent2)"></span>기준점(손/배경)</button>
+    </div>
+    <div class="stage-wrap">
+      <canvas id="stage"></canvas>
+      <canvas id="mag" width="160" height="160" hidden></canvas>
+    </div>
+    <div class="coords">
+      <span>측정점 <b id="tCoord">미지정</b></span>
+      <span>기준점 <b id="rCoord">미지정</b></span>
+    </div>
+    <div class="row">
+      <button class="ghost" id="resetPoints">점 다시 선택</button>
+    </div>
+
+    <details>
+      <summary class="adv">고급 설정</summary>
+      <div class="advbody">
+        <div class="field"><label>패치 반경(px)</label><input type="number" id="patchHalf" value="8" min="4" max="30"></div>
+        <div class="field"><label>탐색 반경(px)</label><input type="number" id="searchR" value="8" min="4" max="30"></div>
+        <div class="field"><label>시작 생략(초)</label><input type="number" id="skipSec" value="0" min="0" step="0.1"></div>
+        <div class="field"><label>분석 길이(초, 0=끝까지)</label><input type="number" id="durSec" value="0" min="0" step="0.1"></div>
+        <div class="field"><label>최소 분석 주파수(Hz)</label><input type="number" id="fMin" value="1" min="0" step="0.5"></div>
+        <div class="field check"><input type="checkbox" id="fastMode"><label for="fastMode" style="margin-left:6px">빠른 처리(프레임 누락 위험, 재생속도 4배)</label></div>
+      </div>
+    </details>
+
+    <button class="primarybtn" id="analyzeBtn" disabled>분석 시작</button>
+    <div class="progress" id="progress"><div class="bar" id="progressBar"></div></div>
+    <div class="status" id="statusLine"></div>
+    <div class="warnbox" id="rvfcWarn">이 브라우저는 정밀 프레임 콜백(requestVideoFrameCallback)을 지원하지 않아 고속 영상 분석 정확도가 떨어질 수 있습니다. 모바일 Chrome 또는 Safari 사용을 권장합니다.</div>
+  </section>
+
+  <section class="results" id="results">
+    <div class="card">
+      <div class="step-label"><span class="num">3</span>분석 결과</div>
+      <div class="readout">
+        <span class="big" id="peakFreq">—</span><span class="unit">Hz 주요 고유진동수</span>
+      </div>
+      <div class="warnbox" id="nyquistWarn">검출된 주파수가 나이퀴스트 한계에 가까워 실제 값보다 낮게 측정(에일리어싱)되었을 수 있습니다. 더 높은 프레임레이트로 재촬영을 권장합니다.</div>
+      <div class="warnbox" id="noPeakWarn">뚜렷한 피크를 찾지 못했습니다. 더 강한 임팩트, 더 긴 촬영, 또는 선명한 마커를 시도해보세요.</div>
+      <div class="statgrid">
+        <div class="cell"><div class="v" id="statFps">—</div><div class="k">검출 FPS</div></div>
+        <div class="cell"><div class="v" id="statNyq">—</div><div class="k">나이퀴스트(Hz)</div></div>
+        <div class="cell"><div class="v" id="statN">—</div><div class="k">분석 프레임 수</div></div>
+      </div>
+      <div class="peaklist" id="peakList"></div>
+
+      <div class="charttitle">주파수 스펙트럼</div>
+      <canvas class="chart" id="chartSpec"></canvas>
+      <div class="legend"><span><i style="background:var(--accent)"></i>진폭</span></div>
+
+      <div class="charttitle">상대 변위 (시간 영역)</div>
+      <canvas class="chart" id="chartTime"></canvas>
+      <div class="legend"><span><i style="background:var(--accent)"></i>측정점 − 기준점 (주성분 투영)</span></div>
+
+      <button class="ghost" id="reanalyzeBtn" style="margin-top:14px; width:100%;">설정 바꿔 다시 분석</button>
+    </div>
+  </section>
+
+  <footer>
+    원리: 측정점과 기준점의 프레임별 변위를 템플릿 매칭(정규화 상호상관)으로 서브픽셀 추적하고, 두 점의 상대 변위를 주성분 방향으로 투영한 뒤 FFT를 적용해 가장 강한 주파수 성분을 찾습니다. 처리는 이 페이지 안에서만 이루어지며 영상은 어디로도 전송되지 않습니다.
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const fileInput = document.getElementById('fileInput');
+const pickBtn = document.getElementById('pickBtn');
+const fileName = document.getElementById('fileName');
+const pickSection = document.getElementById('pickSection');
+const video = document.getElementById('video');
+const stage = document.getElementById('stage');
+const stageCtx = stage.getContext('2d', {willReadFrequently:true});
+const mag = document.getElementById('mag');
+const magCtx = mag.getContext('2d');
+const modeTargetBtn = document.getElementById('modeTarget');
+const modeRefBtn = document.getElementById('modeRef');
+const tCoord = document.getElementById('tCoord');
+const rCoord = document.getElementById('rCoord');
+const resetPointsBtn = document.getElementById('resetPoints');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const progress = document.getElementById('progress');
+const progressBar = document.getElementById('progressBar');
+const statusLine = document.getElementById('statusLine');
+const rvfcWarn = document.getElementById('rvfcWarn');
+const results = document.getElementById('results');
+const reanalyzeBtn = document.getElementById('reanalyzeBtn');
+
+let baseCanvas = document.createElement('canvas');
+let baseCtx = baseCanvas.getContext('2d', {willReadFrequently:true});
+let mode = 'target';
+let points = {target:null, ref:null};
+let dragging = false;
+let objectUrl = null;
+
+pickBtn.addEventListener('click', ()=>fileInput.click());
+fileInput.addEventListener('change', onFile);
+
+function onFile(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  if(objectUrl) URL.revokeObjectURL(objectUrl);
+  objectUrl = URL.createObjectURL(f);
+  fileName.textContent = f.name;
+  results.style.display='none';
+  points = {target:null, ref:null};
+  updateCoordLabels();
+  video.hidden = false;
+  video.src = objectUrl;
+  video.load();
+}
+
+video.addEventListener('loadedmetadata', ()=>{
+  stage.width = video.videoWidth;
+  stage.height = video.videoHeight;
+  baseCanvas.width = video.videoWidth;
+  baseCanvas.height = video.videoHeight;
+  video.currentTime = 0;
+});
+
+video.addEventListener('seeked', function onFirstSeek(){
+  baseCtx.drawImage(video,0,0,baseCanvas.width,baseCanvas.height);
+  redrawBase();
+  pickSection.style.display = '';
+  rvfcWarn.style.display = (typeof video.requestVideoFrameCallback === 'function') ? 'none' : 'block';
+}, {once:true});
+
+function redrawBase(){
+  stageCtx.drawImage(baseCanvas,0,0);
+  if(points.target) drawCrosshair(stageCtx, points.target, 'target');
+  if(points.ref) drawCrosshair(stageCtx, points.ref, 'ref');
+}
+
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function drawCrosshair(ctx, pt, kind){
+  const color = kind==='target' ? (cssVar('--accent')||'#0f8a7a') : (cssVar('--accent2')||'#b8720f');
+  const r = Math.max(10, stage.width/70);
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = Math.max(2, stage.width/360);
+  ctx.beginPath();
+  if(kind==='target'){
+    ctx.moveTo(pt.x-r,pt.y); ctx.lineTo(pt.x+r,pt.y);
+    ctx.moveTo(pt.x,pt.y-r); ctx.lineTo(pt.x,pt.y+r);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(pt.x,pt.y,r*0.45,0,Math.PI*2); ctx.stroke();
+  } else {
+    ctx.strokeRect(pt.x-r*0.7, pt.y-r*0.7, r*1.4, r*1.4);
+    ctx.beginPath(); ctx.moveTo(pt.x-r,pt.y); ctx.lineTo(pt.x+r,pt.y);
+    ctx.moveTo(pt.x,pt.y-r); ctx.lineTo(pt.x,pt.y+r); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function updateCoordLabels(){
+  tCoord.textContent = points.target ? `(${points.target.x.toFixed(0)}, ${points.target.y.toFixed(0)})` : '미지정';
+  rCoord.textContent = points.ref ? `(${points.ref.x.toFixed(0)}, ${points.ref.y.toFixed(0)})` : '미지정';
+  analyzeBtn.disabled = !(points.target && points.ref);
+}
+
+modeTargetBtn.addEventListener('click', ()=>{ mode='target'; modeTargetBtn.dataset.active='true'; modeRefBtn.dataset.active='false'; });
+modeRefBtn.addEventListener('click', ()=>{ mode='ref'; modeRefBtn.dataset.active='true'; modeTargetBtn.dataset.active='false'; });
+resetPointsBtn.addEventListener('click', ()=>{ points={target:null,ref:null}; updateCoordLabels(); redrawBase(); });
+
+function toNative(evt){
+  const rect = stage.getBoundingClientRect();
+  const scaleX = stage.width/rect.width, scaleY = stage.height/rect.height;
+  return { x:(evt.clientX-rect.left)*scaleX, y:(evt.clientY-rect.top)*scaleY };
+}
+
+function showMagnifier(pt){
+  mag.hidden = false;
+  magCtx.imageSmoothingEnabled = false;
+  magCtx.clearRect(0,0,160,160);
+  const half = 20;
+  const sx = Math.max(0, Math.min(baseCanvas.width-2*half, pt.x-half));
+  const sy = Math.max(0, Math.min(baseCanvas.height-2*half, pt.y-half));
+  magCtx.drawImage(baseCanvas, sx, sy, 2*half, 2*half, 0, 0, 160, 160);
+  magCtx.strokeStyle = '#ffffff'; magCtx.lineWidth=1;
+  magCtx.beginPath(); magCtx.moveTo(80,0); magCtx.lineTo(80,160); magCtx.moveTo(0,80); magCtx.lineTo(160,80); magCtx.stroke();
+}
+
+stage.addEventListener('pointerdown', (e)=>{
+  if(!baseCanvas.width) return;
+  dragging = true;
+  const pt = toNative(e);
+  points[mode] = pt;
+  updateCoordLabels(); redrawBase(); showMagnifier(pt);
+});
+stage.addEventListener('pointermove', (e)=>{
+  if(!dragging) return;
+  const pt = toNative(e);
+  points[mode] = pt;
+  updateCoordLabels(); redrawBase(); showMagnifier(pt);
+});
+window.addEventListener('pointerup', ()=>{ if(dragging){ dragging=false; mag.hidden=true; } });
+
+/* ---------- tracking ---------- */
+
+function getGray(ctx, x, y, w, h){
+  const img = ctx.getImageData(x,y,w,h).data;
+  const out = new Float64Array(w*h);
+  for(let i=0;i<w*h;i++){
+    out[i] = 0.299*img[i*4] + 0.587*img[i*4+1] + 0.114*img[i*4+2];
+  }
+  return out;
+}
+
+function buildSAT(gray,w,h){
+  const W=w+1, H=h+1;
+  const sat = new Float64Array(W*H), satSq = new Float64Array(W*H);
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const v = gray[y*w+x];
+      sat[(y+1)*W+(x+1)] = sat[y*W+(x+1)] + sat[(y+1)*W+x] - sat[y*W+x] + v;
+      satSq[(y+1)*W+(x+1)] = satSq[y*W+(x+1)] + satSq[(y+1)*W+x] - satSq[y*W+x] + v*v;
+    }
+  }
+  return {
+    rectSum(x,y,rw,rh){ return sat[(y+rh)*W+(x+rw)] - sat[y*W+(x+rw)] - sat[(y+rh)*W+x] + sat[y*W+x]; },
+    rectSumSq(x,y,rw,rh){ return satSq[(y+rh)*W+(x+rw)] - satSq[y*W+(x+rw)] - satSq[(y+rh)*W+x] + satSq[y*W+x]; }
+  };
+}
+
+function buildTemplate(ctx, pt, half){
+  const size = half*2+1;
+  const x0 = Math.round(pt.x-half), y0 = Math.round(pt.y-half);
+  const data = getGray(ctx, Math.max(0,x0), Math.max(0,y0), size, size);
+  let sum=0; for(let i=0;i<data.length;i++) sum+=data[i];
+  const mean = sum/data.length;
+  let varSum=0; for(let i=0;i<data.length;i++){ const d=data[i]-mean; varSum+=d*d; }
+  return {data, mean, varSum, size};
+}
+
+function clampNum(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
+function trackPoint(ctx, prev, template, half, searchR, W, H){
+  const size = template.size;
+  const cx = Math.round(prev.x), cy = Math.round(prev.y);
+  let left = cx-half-searchR, top = cy-half-searchR;
+  let winW = size+2*searchR, winH = size+2*searchR;
+  if(left<0){ winW+=left; left=0; }
+  if(top<0){ winH+=top; top=0; }
+  if(left+winW>W) winW = W-left;
+  if(top+winH>H) winH = H-top;
+  if(winW<size || winH<size) return prev;
+  const gray = getGray(ctx, left, top, winW, winH);
+  const sat = buildSAT(gray, winW, winH);
+  const maxOx = winW-size, maxOy = winH-size;
+  const n = size*size;
+  const scoreGrid = new Float64Array((maxOx+1)*(maxOy+1));
+  let best=-Infinity, bestOx=0, bestOy=0;
+  for(let oy=0; oy<=maxOy; oy++){
+    for(let ox=0; ox<=maxOx; ox++){
+      const s = sat.rectSum(ox,oy,size,size);
+      const sSq = sat.rectSumSq(ox,oy,size,size);
+      const wmean = s/n;
+      const wvar = sSq - n*wmean*wmean;
+      let dot=0;
+      for(let j=0;j<size;j++){
+        const rowBase=(oy+j)*winW+ox, tBase=j*size;
+        for(let i=0;i<size;i++) dot += template.data[tBase+i]*gray[rowBase+i];
+      }
+      const numerator = dot - n*template.mean*wmean;
+      const denom = Math.sqrt(Math.max(template.varSum,1e-6)*Math.max(wvar,1e-6));
+      const score = denom>1e-6 ? numerator/denom : -Infinity;
+      scoreGrid[oy*(maxOx+1)+ox] = score;
+      if(score>best){ best=score; bestOx=ox; bestOy=oy; }
+    }
+  }
+  function at(ox,oy){ if(ox<0||oy<0||ox>maxOx||oy>maxOy) return best; return scoreGrid[oy*(maxOx+1)+ox]; }
+  const sL=at(bestOx-1,bestOy), sC=best, sR=at(bestOx+1,bestOy);
+  const dX = sL-2*sC+sR;
+  const subX = Math.abs(dX)>1e-9 ? clampNum(0.5*(sL-sR)/dX,-0.5,0.5) : 0;
+  const sT=at(bestOx,bestOy-1), sB=at(bestOx,bestOy+1);
+  const dY = sT-2*sC+sB;
+  const subY = Math.abs(dY)>1e-9 ? clampNum(0.5*(sT-sB)/dY,-0.5,0.5) : 0;
+  return { x: left+bestOx+half+subX, y: top+bestOy+half+subY };
+}
+
+/* ---------- analysis pipeline ---------- */
+
+analyzeBtn.addEventListener('click', runAnalysis);
+reanalyzeBtn.addEventListener('click', ()=>{ results.style.display='none'; window.scrollTo({top:pickSection.offsetTop-10, behavior:'smooth'}); });
+
+async function runAnalysis(){
+  analyzeBtn.disabled = true;
+  video.controls = false;
+  progress.style.display='block';
+  progressBar.style.width='0%';
+  statusLine.textContent = '템플릿 준비 중...';
+
+  const half = parseInt(document.getElementById('patchHalf').value)||8;
+  const searchR = parseInt(document.getElementById('searchR').value)||8;
+  const skipSec = Math.max(0, parseFloat(document.getElementById('skipSec').value)||0);
+  const durSec = Math.max(0, parseFloat(document.getElementById('durSec').value)||0);
+  const fMin = Math.max(0, parseFloat(document.getElementById('fMin').value)||1);
+  const fast = document.getElementById('fastMode').checked;
+
+  const templateTarget = buildTemplate(baseCtx, points.target, half);
+  const templateRef = buildTemplate(baseCtx, points.ref, half);
+  let curTarget = {x:points.target.x, y:points.target.y};
+  let curRef = {x:points.ref.x, y:points.ref.y};
+  const samples = [];
+  const W = stage.width, H = stage.height;
+
+  video.pause();
+  await seekTo(skipSec);
+  video.playbackRate = fast ? 4 : 1;
+  const useRVFC = typeof video.requestVideoFrameCallback === 'function';
+  const endTime = durSec>0 ? skipSec+durSec : video.duration;
+
+  await new Promise((resolve)=>{
+    function step(t){
+      stageCtx.drawImage(video,0,0,W,H);
+      curTarget = trackPoint(stageCtx, curTarget, templateTarget, half, searchR, W, H);
+      curRef = trackPoint(stageCtx, curRef, templateRef, half, searchR, W, H);
+      samples.push({t, x:curTarget.x, y:curTarget.y, rx:curRef.x, ry:curRef.y});
+      drawCrosshair(stageCtx, curTarget, 'target');
+      drawCrosshair(stageCtx, curRef, 'ref');
+      const frac = clampNum((t-skipSec)/Math.max(0.001,(endTime-skipSec)),0,1);
+      progressBar.style.width = (frac*100).toFixed(1)+'%';
+      statusLine.textContent = `처리 중... ${t.toFixed(2)}s / ${endTime.toFixed(2)}s (${samples.length} 프레임)`;
+    }
+    function finish(){ video.pause(); resolve(); }
+    function onFrame(now, metadata){
+      const t = (metadata && metadata.mediaTime!=null) ? metadata.mediaTime : video.currentTime;
+      step(t);
+      if(video.ended || t>=endTime){ finish(); return; }
+      video.requestVideoFrameCallback(onFrame);
+    }
+    function pollFrame(){
+      if(video.paused || video.ended){ return; }
+      const t = video.currentTime;
+      step(t);
+      if(video.ended || t>=endTime){ finish(); return; }
+      requestAnimationFrame(pollFrame);
+    }
+    video.onended = finish;
+    video.play().then(()=>{
+      if(useRVFC) video.requestVideoFrameCallback(onFrame);
+      else requestAnimationFrame(pollFrame);
+    }).catch(()=>{ statusLine.textContent='영상 재생 실패'; video.controls=true; analyzeBtn.disabled=false; progress.style.display='none'; resolve(); });
+  });
+
+  progress.style.display='none';
+  statusLine.textContent = `완료: ${samples.length}개 프레임 분석`;
+  analyzeBtn.disabled = false;
+  video.controls = true;
+  video.playbackRate = 1;
+
+  if(samples.length < 8){
+    statusLine.textContent = '유효한 프레임이 너무 적습니다. 영상을 다시 확인해주세요.';
+    return;
+  }
+  const result = analyze(samples, fMin);
+  renderResults(result);
+}
+
+function seekTo(t){
+  return new Promise(resolve=>{
+    function h(){ video.removeEventListener('seeked', h); resolve(); }
+    video.addEventListener('seeked', h);
+    video.currentTime = t;
+  });
+}
+
+function mean(arr){ let s=0; for(const v of arr) s+=v; return s/arr.length; }
+
+function detrendLinear(arr){
+  const n = arr.length;
+  let sx=0,sy=0,sxx=0,sxy=0;
+  for(let i=0;i<n;i++){ sx+=i; sy+=arr[i]; sxx+=i*i; sxy+=i*arr[i]; }
+  const denom = n*sxx - sx*sx;
+  if(Math.abs(denom)<1e-9) return;
+  const slope = (n*sxy-sx*sy)/denom;
+  const intercept = (sy-slope*sx)/n;
+  for(let i=0;i<n;i++) arr[i] -= slope*i+intercept;
+}
+
+function nextPow2(x){ let p=1; while(p<x) p<<=1; return p; }
+
+function fft(re, im){
+  const n = re.length;
+  for(let i=1,j=0;i<n;i++){
+    let bit = n>>1;
+    for(; j&bit; bit>>=1) j^=bit;
+    j^=bit;
+    if(i<j){ let tr=re[i]; re[i]=re[j]; re[j]=tr; let ti=im[i]; im[i]=im[j]; im[j]=ti; }
+  }
+  for(let len=2; len<=n; len<<=1){
+    const ang = -2*Math.PI/len;
+    const wr = Math.cos(ang), wi = Math.sin(ang);
+    for(let i=0;i<n;i+=len){
+      let curWr=1, curWi=0;
+      for(let k=0;k<len/2;k++){
+        const uRe=re[i+k], uIm=im[i+k];
+        const vRe=re[i+k+len/2]*curWr - im[i+k+len/2]*curWi;
+        const vIm=re[i+k+len/2]*curWi + im[i+k+len/2]*curWr;
+        re[i+k]=uRe+vRe; im[i+k]=uIm+vIm;
+        re[i+k+len/2]=uRe-vRe; im[i+k+len/2]=uIm-vIm;
+        const nWr=curWr*wr-curWi*wi, nWi=curWr*wi+curWi*wr;
+        curWr=nWr; curWi=nWi;
+      }
+    }
+  }
+}
+
+function analyze(samples, fMin){
+  const n = samples.length;
+  const t = samples.map(s=>s.t);
+  const dx = new Array(n), dy = new Array(n);
+  for(let i=0;i<n;i++){ dx[i]=samples[i].x-samples[i].rx; dy[i]=samples[i].y-samples[i].ry; }
+  const mdx = mean(dx), mdy = mean(dy);
+  let cxx=0,cyy=0,cxy=0;
+  for(let i=0;i<n;i++){ const a=dx[i]-mdx,b=dy[i]-mdy; cxx+=a*a; cyy+=b*b; cxy+=a*b; }
+  cxx/=n; cyy/=n; cxy/=n;
+  const theta = 0.5*Math.atan2(2*cxy, cxx-cyy);
+  const ct=Math.cos(theta), st=Math.sin(theta);
+  const s = new Array(n);
+  for(let i=0;i<n;i++) s[i] = (dx[i]-mdx)*ct + (dy[i]-mdy)*st;
+
+  const dts=[]; for(let i=1;i<n;i++) dts.push(t[i]-t[i-1]);
+  dts.sort((a,b)=>a-b);
+  const dtMedian = dts[Math.floor(dts.length/2)] || (1/30);
+  const fs = 1/dtMedian;
+
+  const t0=t[0], t1=t[n-1];
+  const Nuniform = Math.max(8, Math.floor((t1-t0)/dtMedian)+1);
+  const uniform = new Float64Array(Nuniform);
+  let j=0;
+  for(let k=0;k<Nuniform;k++){
+    const tt = t0+k*dtMedian;
+    while(j<n-2 && t[j+1]<tt) j++;
+    const ta=t[j], tb=(j+1<n)?t[j+1]:t[j];
+    const sa=s[j], sb=(j+1<n)?s[j+1]:s[j];
+    const frac = tb>ta ? (tt-ta)/(tb-ta) : 0;
+    uniform[k] = sa + frac*(sb-sa);
+  }
+
+  detrendLinear(uniform);
+
+  const Nfft = nextPow2(uniform.length);
+  const re = new Float64Array(Nfft), im = new Float64Array(Nfft);
+  const L = uniform.length;
+  for(let k=0;k<L;k++){
+    const w = L>1 ? 0.5-0.5*Math.cos(2*Math.PI*k/(L-1)) : 1;
+    re[k] = uniform[k]*w;
+  }
+  fft(re, im);
+  const half = Nfft/2;
+  const mags = new Float64Array(half);
+  for(let k=0;k<half;k++) mags[k] = Math.hypot(re[k], im[k]);
+
+  const freqRes = fs/Nfft;
+  const kmin = Math.max(1, Math.round(fMin/freqRes));
+  const peaks = [];
+  for(let k=kmin+1;k<mags.length-1;k++){
+    if(mags[k]>mags[k-1] && mags[k]>=mags[k+1]) peaks.push({k, f:k*freqRes, mag:mags[k]});
+  }
+  peaks.sort((a,b)=>b.mag-a.mag);
+  const picked = [];
+  for(const p of peaks){
+    if(picked.every(q=>Math.abs(q.f-p.f) > Math.max(1, freqRes*3))) picked.push(p);
+    if(picked.length>=5) break;
+  }
+
+  return { fs, nyquist: fs/2, freqRes, mags, picked, timeSeries: uniform, dt: dtMedian, n };
+}
+
+/* ---------- rendering ---------- */
+
+function renderResults(r){
+  results.style.display='block';
+  const peakFreqEl = document.getElementById('peakFreq');
+  const nyquistWarn = document.getElementById('nyquistWarn');
+  const noPeakWarn = document.getElementById('noPeakWarn');
+
+  if(r.picked.length===0){
+    peakFreqEl.textContent = '—';
+    noPeakWarn.style.display = 'block';
+    nyquistWarn.style.display = 'none';
+  } else {
+    peakFreqEl.textContent = r.picked[0].f.toFixed(2);
+    noPeakWarn.style.display = 'none';
+    nyquistWarn.style.display = (r.picked[0].f > 0.85*r.nyquist) ? 'block' : 'none';
+  }
+
+  document.getElementById('statFps').textContent = r.fs.toFixed(1);
+  document.getElementById('statNyq').textContent = r.nyquist.toFixed(1);
+  document.getElementById('statN').textContent = r.n;
+
+  const peakList = document.getElementById('peakList');
+  peakList.innerHTML = '';
+  const topMag = r.picked.length ? r.picked[0].mag : 1;
+  r.picked.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'row2';
+    row.innerHTML = `<span>${i===0?'1차(주요)':'부차 '+(i+1)}</span>
+      <span class="f">${p.f.toFixed(2)} Hz</span>
+      <span class="bar"><i style="width:${(p.mag/topMag*100).toFixed(0)}%"></i></span>`;
+    peakList.appendChild(row);
+  });
+
+  drawSpectrum(r);
+  drawTimeSeries(r);
+  results.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function setupChartCanvas(canvas){
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || canvas.parentElement.clientWidth || 300;
+  const h = 150;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w, h};
+}
+
+function drawSpectrum(r){
+  const canvas = document.getElementById('chartSpec');
+  const {ctx,w,h} = setupChartCanvas(canvas);
+  const pad = {l:40,r:12,t:10,b:22};
+  const plotW = w-pad.l-pad.r, plotH = h-pad.t-pad.b;
+  const fg = cssVar('--fg'), fgDim = cssVar('--fg-dim'), accent = cssVar('--accent'), border = cssVar('--border');
+  ctx.clearRect(0,0,w,h);
+  const fMax = r.nyquist;
+  const kMax = Math.min(r.mags.length-1, Math.round(fMax/r.freqRes));
+  let maxMag = 1e-9;
+  for(let k=0;k<=kMax;k++) if(r.mags[k]>maxMag) maxMag = r.mags[k];
+
+  ctx.strokeStyle = border; ctx.lineWidth=1; ctx.font='10px '+getFontMono();
+  ctx.fillStyle = fgDim; ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let g=0; g<=4; g++){
+    const y = pad.t + plotH*(1-g/4);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w-pad.r, y); ctx.strokeStyle=border; ctx.stroke();
+  }
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let g=0; g<=4; g++){
+    const f = fMax*g/4;
+    const x = pad.l + plotW*g/4;
+    ctx.fillText(f.toFixed(0), x, h-pad.b+4);
+  }
+  ctx.fillText('Hz', w-pad.r, h-pad.b+4);
+
+  ctx.beginPath();
+  for(let k=0;k<=kMax;k++){
+    const x = pad.l + plotW*(k*r.freqRes)/fMax;
+    const y = pad.t + plotH*(1-r.mags[k]/maxMag);
+    if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle = accent; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+
+  if(r.picked.length){
+    const p = r.picked[0];
+    const x = pad.l + plotW*(p.f)/fMax;
+    const y = pad.t + plotH*(1-p.mag/maxMag);
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = fg; ctx.font='bold 11px '+getFontMono(); ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(p.f.toFixed(1)+'Hz', clampNum(x,30,w-30), Math.max(12,y-8));
+  }
+}
+
+function drawTimeSeries(r){
+  const canvas = document.getElementById('chartTime');
+  const {ctx,w,h} = setupChartCanvas(canvas);
+  const pad = {l:40,r:12,t:10,b:22};
+  const plotW = w-pad.l-pad.r, plotH = h-pad.t-pad.b;
+  const fgDim = cssVar('--fg-dim'), accent = cssVar('--accent'), border = cssVar('--border');
+  ctx.clearRect(0,0,w,h);
+  const data = r.timeSeries;
+  let minV=Infinity, maxV=-Infinity;
+  for(const v of data){ if(v<minV) minV=v; if(v>maxV) maxV=v; }
+  if(minV===maxV){ minV-=1; maxV+=1; }
+  const dur = (data.length-1)*r.dt;
+
+  ctx.strokeStyle = border; ctx.lineWidth=1;
+  const midY = pad.t + plotH*(1-(0-minV)/(maxV-minV));
+  ctx.beginPath(); ctx.moveTo(pad.l, midY); ctx.lineTo(w-pad.r, midY); ctx.stroke();
+
+  ctx.fillStyle = fgDim; ctx.font='10px '+getFontMono(); ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let g=0; g<=4; g++){
+    const tt = dur*g/4;
+    const x = pad.l + plotW*g/4;
+    ctx.fillText(tt.toFixed(2), x, h-pad.b+4);
+  }
+  ctx.fillText('s', w-pad.r, h-pad.b+4);
+
+  ctx.beginPath();
+  for(let i=0;i<data.length;i++){
+    const x = pad.l + plotW*i/(data.length-1);
+    const y = pad.t + plotH*(1-(data[i]-minV)/(maxV-minV));
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle = accent; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+}
+
+function getFontMono(){ return "'JetBrains Mono',monospace"; }
+
+})();
+</script>
